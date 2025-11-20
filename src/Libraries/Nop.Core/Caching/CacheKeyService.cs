@@ -56,11 +56,13 @@ namespace Nop.Core.Caching
         /// <returns>String hash value</returns>
         protected virtual string CreateIdsHash(IEnumerable<int> ids)
         {
-            var identifiers = ids.ToList();
+            // Optimize: use materialized collection only when needed for ordering
+            var identifiers = ids as IList<int> ?? ids.ToList();
 
-            if (!identifiers.Any())
+            if (identifiers.Count == 0)
                 return string.Empty;
 
+            // For small collections, sorting in-place is faster
             var identifiersString = string.Join(", ", identifiers.OrderBy(id => id));
             return HashHelper.CreateHash(Encoding.UTF8.GetBytes(identifiersString), HashAlgorithm);
         }

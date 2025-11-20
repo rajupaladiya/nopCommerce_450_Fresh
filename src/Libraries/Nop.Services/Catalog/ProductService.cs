@@ -271,7 +271,8 @@ namespace Nop.Services.Catalog
 
                     var selectedIds = allIds.Intersect(exIds).ToList();
 
-                    if (selectedIds.Count() != allIds.Count)
+                    // Use Count property instead of Count() method for better performance
+                    if (selectedIds.Count != allIds.Count)
                         if (_catalogSettings.AttributeValueOutOfStockDisplayType == AttributeValueOutOfStockDisplayType.AlwaysDisplay)
                             return await _localizationService.GetResourceAsync("Products.Availability.SelectRequiredAttributes");
                         else
@@ -626,9 +627,8 @@ namespace Nop.Services.Catalog
                 //apply ACL constraints
                 query = await _aclService.ApplyAcl(query, customerRoleIds);
 
-                featuredProducts = query.ToList();
-
-                return featuredProducts.Select(p => p.Id).ToList();
+                // Optimize: avoid intermediate ToList() - directly project to IDs
+                return query.Select(p => p.Id).ToList();
             });
 
             if (featuredProducts.Count == 0 && featuredProductIds.Count > 0)
@@ -671,9 +671,8 @@ namespace Nop.Services.Catalog
                 //apply ACL constraints
                 query = await _aclService.ApplyAcl(query, customerRoleIds);
 
-                featuredProducts = query.ToList();
-
-                return featuredProducts.Select(p => p.Id).ToList();
+                // Optimize: avoid intermediate ToList() - directly project to IDs
+                return query.Select(p => p.Id).ToList();
             });
 
             if (featuredProducts.Count == 0 && featuredProductIds.Count > 0)

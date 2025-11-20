@@ -171,12 +171,13 @@ namespace Nop.Data
                 //get entries
                 var entries = await query.Where(entry => ids.Contains(entry.Id)).ToListAsync();
 
-                //sort by passed identifiers
-                var sortedEntries = new List<TEntity>();
+                //sort by passed identifiers using dictionary for O(1) lookup instead of O(n) Find()
+                var entriesDictionary = entries.ToDictionary(entry => entry.Id, entry => entry);
+                var sortedEntries = new List<TEntity>(ids.Count);
+                
                 foreach (var id in ids)
                 {
-                    var sortedEntry = entries.Find(entry => entry.Id == id);
-                    if (sortedEntry != null)
+                    if (entriesDictionary.TryGetValue(id, out var sortedEntry))
                         sortedEntries.Add(sortedEntry);
                 }
 

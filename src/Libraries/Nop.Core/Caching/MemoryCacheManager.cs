@@ -117,13 +117,22 @@ namespace Nop.Core.Caching
             if ((key?.CacheTime ?? 0) <= 0)
                 return await acquire();
 
-            if (_memoryCache.TryGetValue(key.Key, out T result))
-                return result;
-
-            result = await acquire();
-
-            if(result != null)
-                await SetAsync(key, result);
+            // Use GetOrCreateAsync to prevent race conditions where multiple threads
+            // could call acquire() simultaneously for the same key
+            var result = await _memoryCache.GetOrCreateAsync(key.Key, async entry =>
+            {
+                entry.SetOptions(PrepareEntryOptions(key));
+                var value = await acquire();
+                
+                // Do not cache null values
+                if (value == null)
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.Zero;
+                    return default(T);
+                }
+                
+                return value;
+            });
 
             return result;
         }
@@ -146,11 +155,19 @@ namespace Nop.Core.Caching
             var result = _memoryCache.GetOrCreate(key.Key, entry =>
             {
                 entry.SetOptions(PrepareEntryOptions(key));
-
-                return acquire();
+                var value = acquire();
+                
+                // Do not cache null values
+                if (value == null)
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.Zero;
+                    return default(T);
+                }
+                
+                return value;
             });
 
-            //do not cache null value
+            // Remove null values from cache
             if (result == null)
                 await RemoveAsync(key);
 

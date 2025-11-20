@@ -22,6 +22,14 @@ namespace Nop.Web.Framework.Infrastructure
             //add options feature
             services.AddOptions();
 
+            //add response compression for better network performance
+            services.AddResponseCompression(options =>
+            {
+                options.EnableForHttps = true;
+                options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+                options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+            });
+
             //add distributed cache
             services.AddDistributedCache();
 
@@ -51,6 +59,9 @@ namespace Nop.Web.Framework.Infrastructure
         /// <param name="application">Builder for configuring an application's request pipeline</param>
         public void Configure(IApplicationBuilder application)
         {
+            //use response compression (should be early in pipeline)
+            application.UseResponseCompression();
+
             //check whether requested page is keep alive page
             application.UseKeepAlive();
 

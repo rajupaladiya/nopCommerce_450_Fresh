@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -7,7 +8,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Newtonsoft.Json;
-using Nito.AsyncEx;
 using Nop.Core.ComponentModel;
 using Nop.Core.Configuration;
 
@@ -22,8 +22,9 @@ namespace Nop.Core.Caching
 
         private readonly IDistributedCache _distributedCache;
         private readonly PerRequestCache _perRequestCache;
-        private static readonly List<string> _keys;
-        private static readonly AsyncLock _locker;
+        // Use ConcurrentDictionary for better thread safety and performance
+        // The value is not used, we only need the keys for tracking
+        private static readonly ConcurrentDictionary<string, byte> _keys;
 
         #endregion
 
@@ -31,8 +32,7 @@ namespace Nop.Core.Caching
 
         static DistributedCacheManager()
         {
-            _locker = new AsyncLock();
-            _keys = new List<string>();
+            _keys = new ConcurrentDictionary<string, byte>();
         }
 
         public DistributedCacheManager(AppSettings appSettings, IDistributedCache distributedCache, IHttpContextAccessor httpContextAccessor) :base(appSettings)
@@ -115,8 +115,8 @@ namespace Nop.Core.Caching
             _distributedCache.SetString(key.Key, JsonConvert.SerializeObject(data), PrepareEntryOptions(key));
             _perRequestCache.Set(key.Key, data);
 
-            using var _ = _locker.Lock();
-            _keys.Add(key.Key);
+            // Thread-safe add operation
+            _keys.TryAdd(key.Key, 0);
         }
 
         #endregion
@@ -243,8 +243,8 @@ namespace Nop.Core.Caching
             await _distributedCache.RemoveAsync(cacheKey.Key);
             _perRequestCache.Remove(cacheKey.Key);
 
-            using var _ = await _locker.LockAsync();
-            _keys.Remove(cacheKey.Key);
+            // Thread-safe remove operation
+            _keys.TryRemove(cacheKey.Key, out _);
         }
 
         /// <summary>
@@ -261,8 +261,8 @@ namespace Nop.Core.Caching
             await _distributedCache.SetStringAsync(key.Key, JsonConvert.SerializeObject(data), PrepareEntryOptions(key));
             _perRequestCache.Set(key.Key, data);
 
-            using var _ = await _locker.LockAsync();
-            _keys.Add(key.Key);
+            // Thread-safe add operation
+            _keys.TryAdd(key.Key, 0);
         }
 
         /// <summary>
@@ -276,12 +276,15 @@ namespace Nop.Core.Caching
             prefix = PrepareKeyPrefix(prefix, prefixParameters);
             _perRequestCache.RemoveByPrefix(prefix);
 
-            using var _ = await _locker.LockAsync();
+            // Thread-safe prefix removal - iterate over keys and remove matching ones
+            var keysToRemove = _keys.Keys
+                .Where(key => key.StartsWith(prefix, StringComparison.InvariantCultureIgnoreCase))
+                .ToList();
             
-            foreach (var key in _keys.Where(key => key.StartsWith(prefix, StringComparison.InvariantCultureIgnoreCase)).ToList())
+            foreach (var key in keysToRemove)
             {
                 await _distributedCache.RemoveAsync(key);
-                _keys.Remove(key);
+                _keys.TryRemove(key, out _);
             }
         }
 
@@ -293,15 +296,17 @@ namespace Nop.Core.Caching
         {
             //we can't use _perRequestCache.Clear(),
             //because HttpContext stores some server data that we should not delete
-            foreach (var redisKey in _keys)
+            var keysSnapshot = _keys.Keys.ToList();
+            
+            foreach (var redisKey in keysSnapshot)
                 _perRequestCache.Remove(redisKey);
 
-            using var _ = await _locker.LockAsync();
-
-            foreach (var key in _keys) 
+            // Remove all keys from distributed cache and tracking dictionary
+            foreach (var key in keysSnapshot) 
+            {
                 await _distributedCache.RemoveAsync(key);
-
-            _keys.Clear();
+                _keys.TryRemove(key, out _);
+            }
         }
 
         /// <summary>
