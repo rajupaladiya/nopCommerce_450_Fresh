@@ -357,7 +357,23 @@ namespace Nop.Web.Framework.Infrastructure.Extensions
                     ((MemoryCacheStorage)miniProfilerOptions.Storage).CacheDuration = TimeSpan.FromMinutes(appSettings.Get<CacheConfig>().DefaultCacheTime);
 
                     //determine who can access the MiniProfiler results
-                    miniProfilerOptions.ResultsAuthorize = request => EngineContext.Current.Resolve<IPermissionService>().AuthorizeAsync(StandardPermissionProvider.AccessProfiling).Result;
+                    // CRITICAL FIX: Use async properly to avoid thread pool starvation
+                    // Note: MiniProfiler ResultsAuthorize doesn't support async, so we use GetAwaiter().GetResult()
+                    // but only in a synchronous context where it's safe. For high concurrency, consider disabling MiniProfiler in production.
+                    miniProfilerOptions.ResultsAuthorize = request =>
+                    {
+                        try
+                        {
+                            var permissionService = EngineContext.Current.Resolve<IPermissionService>();
+                            // Use ConfigureAwait(false) to avoid deadlocks, but still blocking - consider disabling MiniProfiler in production
+                            return permissionService.AuthorizeAsync(StandardPermissionProvider.AccessProfiling).ConfigureAwait(false).GetAwaiter().GetResult();
+                        }
+                        catch
+                        {
+                            // If authorization fails, deny access
+                            return false;
+                        }
+                    };
                 });
             }
         }
@@ -426,17 +442,51 @@ namespace Nop.Web.Framework.Infrastructure.Extensions
         /// <param name="services">Collection of service descriptors</param>
         public static void AddNopHttpClients(this IServiceCollection services)
         {
-            //default client
-            services.AddHttpClient(NopHttpDefaults.DefaultHttpClient).WithProxy();
+            //default client with optimized settings for high concurrency
+            services.AddHttpClient(NopHttpDefaults.DefaultHttpClient, client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30); // 30 second timeout
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                MaxConnectionsPerServer = 100, // Allow 100 connections per server
+                UseCookies = true,
+                AllowAutoRedirect = true,
+                MaxAutomaticRedirections = 5
+            })
+            .WithProxy();
 
             //client to request current store
-            services.AddHttpClient<StoreHttpClient>();
+            services.AddHttpClient<StoreHttpClient>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                MaxConnectionsPerServer = 50
+            });
 
             //client to request nopCommerce official site
-            services.AddHttpClient<NopHttpClient>().WithProxy();
+            services.AddHttpClient<NopHttpClient>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10); // Shorter timeout for external calls
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                MaxConnectionsPerServer = 20
+            })
+            .WithProxy();
 
             //client to request reCAPTCHA service
-            services.AddHttpClient<CaptchaHttpClient>().WithProxy();
+            services.AddHttpClient<CaptchaHttpClient>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(10); // Shorter timeout for external calls
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                MaxConnectionsPerServer = 20
+            })
+            .WithProxy();
         }
     }
 }

@@ -100,6 +100,15 @@ namespace Nop.Web.Framework.Infrastructure
             }
             else
             {
+                // Configure memory cache with size limits for high concurrency
+                services.AddMemoryCache(options =>
+                {
+                    // Set size limit to prevent unbounded memory growth
+                    // Each cache entry counts as 1 unit by default
+                    options.SizeLimit = 10000; // Limit to 10,000 cache entries
+                    options.CompactionPercentage = 0.25; // Compact 25% when limit is reached
+                });
+                
                 services.AddSingleton<ILocker, MemoryCacheManager>();
                 services.AddSingleton<IStaticCacheManager, MemoryCacheManager>();
             }
