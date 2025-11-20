@@ -33,14 +33,14 @@ namespace Nop.Data.DataProviders
             var connectionString = DataSettingsManager.LoadSettings().ConnectionString;
             var builder = new SqlConnectionStringBuilder(connectionString);
             
-            // Ensure connection pooling is optimized for high concurrency
+            // Ensure connection pooling is optimized for high concurrency (10000+ users)
             if (!connectionString.Contains("Max Pool Size", StringComparison.OrdinalIgnoreCase))
             {
-                builder.MaxPoolSize = 5000;
+                builder.MaxPoolSize = 10000;
             }
             if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase))
             {
-                builder.MinPoolSize = 10;
+                builder.MinPoolSize = 50;
             }
             if (!connectionString.Contains("Pooling", StringComparison.OrdinalIgnoreCase))
             {
@@ -297,9 +297,9 @@ namespace Nop.Data.DataProviders
                 PersistSecurityInfo = false,
                 IntegratedSecurity = nopConnectionString.IntegratedSecurity,
                 TrustServerCertificate = true,
-                // Performance optimizations for high concurrency (5000+ users)
-                MaxPoolSize = 5000, // Allow up to 5000 connections in pool
-                MinPoolSize = 10, // Keep minimum connections ready
+                // Performance optimizations for high concurrency (10000+ users)
+                MaxPoolSize = 10000, // Allow up to 10000 connections in pool
+                MinPoolSize = 50, // Keep minimum connections ready for faster response
                 Pooling = true, // Enable connection pooling
                 ConnectionTimeout = 30, // 30 second connection timeout
                 CommandTimeout = 30, // 30 second command timeout

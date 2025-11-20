@@ -47,16 +47,16 @@ namespace Nop.Data.DataProviders
             var connectionString = GetCurrentConnectionString();
             var builder = new MySqlConnectionStringBuilder(connectionString);
             
-            // Ensure connection pooling is optimized for high concurrency
+            // Ensure connection pooling is optimized for high concurrency (10000+ users)
             if (!connectionString.Contains("Maximum Pool Size", StringComparison.OrdinalIgnoreCase) && 
                 !connectionString.Contains("Max Pool Size", StringComparison.OrdinalIgnoreCase))
             {
-                builder.MaximumPoolSize = 5000;
+                builder.MaximumPoolSize = 10000;
             }
             if (!connectionString.Contains("Minimum Pool Size", StringComparison.OrdinalIgnoreCase) && 
                 !connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase))
             {
-                builder.MinimumPoolSize = 10;
+                builder.MinimumPoolSize = 50;
             }
             if (!connectionString.Contains("Pooling", StringComparison.OrdinalIgnoreCase))
             {
@@ -299,9 +299,9 @@ namespace Nop.Data.DataProviders
                 AllowUserVariables = true,
                 UserID = nopConnectionString.Username,
                 Password = nopConnectionString.Password,
-                // Performance optimizations for high concurrency (5000+ users)
-                MaximumPoolSize = 5000, // Allow up to 5000 connections in pool
-                MinimumPoolSize = 10, // Keep minimum connections ready
+                // Performance optimizations for high concurrency (10000+ users)
+                MaximumPoolSize = 10000, // Allow up to 10000 connections in pool
+                MinimumPoolSize = 50, // Keep minimum connections ready for faster response
                 Pooling = true, // Enable connection pooling
                 ConnectionTimeout = 30, // 30 second connection timeout
                 DefaultCommandTimeout = 30, // 30 second command timeout
