@@ -42,7 +42,30 @@ namespace Nop.Data.DataProviders
 
         protected static NpgsqlConnectionStringBuilder GetConnectionStringBuilder()
         {
-            return new NpgsqlConnectionStringBuilder(GetCurrentConnectionString());
+            var connectionString = GetCurrentConnectionString();
+            var builder = new NpgsqlConnectionStringBuilder(connectionString);
+            
+            // Ensure connection pooling is optimized for high concurrency
+            if (!connectionString.Contains("Max Pool Size", StringComparison.OrdinalIgnoreCase) && 
+                !connectionString.Contains("Maximum Pool Size", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.MaxPoolSize = 5000;
+            }
+            if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase) && 
+                !connectionString.Contains("Minimum Pool Size", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.MinPoolSize = 10;
+            }
+            if (!connectionString.Contains("Pooling", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.Pooling = true;
+            }
+            if (!connectionString.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.Timeout = 30;
+            }
+            
+            return builder;
         }
 
         /// <summary>
@@ -331,6 +354,16 @@ namespace Nop.Data.DataProviders
                 Database = nopConnectionString.DatabaseName.ToLowerInvariant(),
                 Username = nopConnectionString.Username,
                 Password = nopConnectionString.Password,
+                // Performance optimizations for high concurrency (5000+ users)
+                MaxPoolSize = 5000, // Allow up to 5000 connections in pool
+                MinPoolSize = 10, // Keep minimum connections ready
+                Pooling = true, // Enable connection pooling
+                Timeout = 30, // 30 second connection timeout
+                CommandTimeout = 30, // 30 second command timeout
+                KeepAlive = 30, // Keep connections alive for 30 seconds
+                NoResetOnClose = true, // Don't reset connection state on close (better performance)
+                Enlist = true, // Enable transaction enlistment
+                ApplicationName = "nopCommerce" // Identify application in PostgreSQL logs
             };
 
             return builder.ConnectionString;

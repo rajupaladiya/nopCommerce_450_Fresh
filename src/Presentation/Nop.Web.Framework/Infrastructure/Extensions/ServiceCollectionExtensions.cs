@@ -124,6 +124,11 @@ namespace Nop.Web.Framework.Infrastructure.Extensions
                 options.Cookie.Name = $"{NopCookieDefaults.Prefix}{NopCookieDefaults.SessionCookie}";
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                // Optimize session for high concurrency
+                options.IdleTimeout = TimeSpan.FromMinutes(20); // Reduce idle timeout to free memory faster
+                options.IOTimeout = TimeSpan.FromSeconds(30); // Timeout for async I/O operations
+                // Note: For 5000+ concurrent users, consider using distributed session (Redis/SQL Server)
+                // instead of in-memory session for better scalability
             });
         }
 

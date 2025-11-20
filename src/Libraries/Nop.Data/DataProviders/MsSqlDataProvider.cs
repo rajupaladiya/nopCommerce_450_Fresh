@@ -31,8 +31,35 @@ namespace Nop.Data.DataProviders
         protected virtual SqlConnectionStringBuilder GetConnectionStringBuilder()
         {
             var connectionString = DataSettingsManager.LoadSettings().ConnectionString;
-
-            return new SqlConnectionStringBuilder(connectionString);
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            
+            // Ensure connection pooling is optimized for high concurrency
+            if (!connectionString.Contains("Max Pool Size", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.MaxPoolSize = 5000;
+            }
+            if (!connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.MinPoolSize = 10;
+            }
+            if (!connectionString.Contains("Pooling", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.Pooling = true;
+            }
+            if (!connectionString.Contains("Connection Timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.ConnectionTimeout = 30;
+            }
+            if (!connectionString.Contains("ConnectRetryCount", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.ConnectRetryCount = 3;
+            }
+            if (!connectionString.Contains("ConnectRetryInterval", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.ConnectRetryInterval = 10;
+            }
+            
+            return builder;
         }
 
         #endregion
@@ -269,7 +296,19 @@ namespace Nop.Data.DataProviders
                 InitialCatalog = nopConnectionString.DatabaseName,
                 PersistSecurityInfo = false,
                 IntegratedSecurity = nopConnectionString.IntegratedSecurity,
-                TrustServerCertificate = true
+                TrustServerCertificate = true,
+                // Performance optimizations for high concurrency (5000+ users)
+                MaxPoolSize = 5000, // Allow up to 5000 connections in pool
+                MinPoolSize = 10, // Keep minimum connections ready
+                Pooling = true, // Enable connection pooling
+                ConnectionTimeout = 30, // 30 second connection timeout
+                CommandTimeout = 30, // 30 second command timeout
+                MultipleActiveResultSets = false, // Disable MARS for better performance
+                Enlist = true, // Enable transaction enlistment
+                // Performance settings
+                ApplicationIntent = ApplicationIntent.ReadWrite,
+                ConnectRetryCount = 3, // Retry connection 3 times
+                ConnectRetryInterval = 10 // Wait 10 seconds between retries
             };
 
             if (!nopConnectionString.IntegratedSecurity)

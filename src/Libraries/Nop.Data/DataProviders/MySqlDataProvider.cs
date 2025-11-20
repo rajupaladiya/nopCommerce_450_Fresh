@@ -44,7 +44,30 @@ namespace Nop.Data.DataProviders
 
         protected static MySqlConnectionStringBuilder GetConnectionStringBuilder()
         {
-            return new MySqlConnectionStringBuilder(GetCurrentConnectionString());
+            var connectionString = GetCurrentConnectionString();
+            var builder = new MySqlConnectionStringBuilder(connectionString);
+            
+            // Ensure connection pooling is optimized for high concurrency
+            if (!connectionString.Contains("Maximum Pool Size", StringComparison.OrdinalIgnoreCase) && 
+                !connectionString.Contains("Max Pool Size", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.MaximumPoolSize = 5000;
+            }
+            if (!connectionString.Contains("Minimum Pool Size", StringComparison.OrdinalIgnoreCase) && 
+                !connectionString.Contains("Min Pool Size", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.MinimumPoolSize = 10;
+            }
+            if (!connectionString.Contains("Pooling", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.Pooling = true;
+            }
+            if (!connectionString.Contains("Connection Timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.ConnectionTimeout = 30;
+            }
+            
+            return builder;
         }
 
         #endregion
@@ -276,6 +299,17 @@ namespace Nop.Data.DataProviders
                 AllowUserVariables = true,
                 UserID = nopConnectionString.Username,
                 Password = nopConnectionString.Password,
+                // Performance optimizations for high concurrency (5000+ users)
+                MaximumPoolSize = 5000, // Allow up to 5000 connections in pool
+                MinimumPoolSize = 10, // Keep minimum connections ready
+                Pooling = true, // Enable connection pooling
+                ConnectionTimeout = 30, // 30 second connection timeout
+                DefaultCommandTimeout = 30, // 30 second command timeout
+                Keepalive = 30, // Keep connections alive for 30 seconds
+                ConnectionReset = false, // Don't reset connection state on return to pool (better performance)
+                CacheServerProperties = true, // Cache server properties for better performance
+                UseCompression = false, // Disable compression for better CPU performance (use network compression instead)
+                SslMode = MySql.Data.MySqlClient.MySqlSslMode.Preferred // Use SSL when available
             };
 
             return builder.ConnectionString;
